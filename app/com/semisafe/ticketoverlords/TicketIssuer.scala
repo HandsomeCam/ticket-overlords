@@ -1,12 +1,11 @@
 package com.semisafe.ticketoverlords
 
-import akka.actor.Actor
-import akka.actor.Status.{ Failure => ActorFailure }
-import play.api.libs.concurrent.Execution.Implicits._
+import javax.inject.Inject
+
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import akka.actor.Status.{Failure => ActorFailure}
+
 import scala.concurrent.Future
-import akka.actor.{ ActorRef, Props }
-import play.api.libs.concurrent.Akka
-import play.api.Play.current
 
 case class AvailabilityCheck(ticketBlockID: Long)
 
@@ -19,7 +18,9 @@ case class TicketBlockUnavailable(
 
 case class TicketBlockCreated(ticketBlock: TicketBlock)
 
-class TicketIssuer extends Actor {
+class TicketIssuer @Inject()(ticketBlocks: TicketBlocks) extends Actor {
+
+  implicit val ec = context.dispatcher
 
   var workers = Map[Long, ActorRef]()
 
@@ -33,7 +34,7 @@ class TicketIssuer extends Actor {
   }
 
   override def preStart = {
-    val ticketBlocksResult = TicketBlock.list
+    val ticketBlocksResult = ticketBlocks.list
 
     for {
       ticketBlocks <- ticketBlocksResult
@@ -69,14 +70,4 @@ class TicketIssuer extends Actor {
   }
 }
 
-object TicketIssuer {
-
-  def props = Props[TicketIssuer]
-
-  private val reference = Akka.system.actorOf(
-    TicketIssuer.props,
-    name = "ticketIssuer")
-
-  def getSelection = Akka.system.actorSelection("/user/ticketIssuer")
-}
 

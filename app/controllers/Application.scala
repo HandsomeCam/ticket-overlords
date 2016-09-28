@@ -1,16 +1,19 @@
 package controllers
 
-import play.api._
+import javax.inject.Inject
+
 import play.api.mvc._
 import play.api.routing.JavaScriptReverseRouter
 
-object Application extends Controller {
+import scala.concurrent.Future
+
+class Application @Inject()(action: BaseAction) extends Controller {
 
   def index = Action {
     Ok(views.html.index())
   }
 
-  def jsRoutes = Action { implicit request =>
+  def jsRoutes = action { implicit request =>
     Ok(
       JavaScriptReverseRouter("jsRoutes")(
         routes.javascript.Events.list,
@@ -20,4 +23,12 @@ object Application extends Controller {
     )
   }
 
+}
+
+
+class BaseAction extends ActionBuilder[Request] {
+  override def invokeBlock[A](request: Request[A],
+                              block: Request[A] => Future[Result]) = {
+    block(request)
+  }
 }

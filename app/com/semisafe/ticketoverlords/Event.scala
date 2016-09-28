@@ -1,18 +1,16 @@
 package com.semisafe.ticketoverlords
 
-import org.joda.time.DateTime
-import play.api.libs.json.{ Json, Format }
+import javax.inject.Inject
 
+import akka.actor.ActorRef
+import org.joda.time.DateTime
+import play.api.libs.json.{Format, Json}
 import play.api.db.slick.DatabaseConfigProvider
 import slick.driver.JdbcProfile
-import play.api.Play.current
-import play.api.db.DBApi
+
 import scala.concurrent.Future
-import play.api.libs.concurrent.Execution.Implicits._
 import akka.util.Timeout
 import akka.pattern.ask
-
-import SlickMapping.jodaDateTimeMapping
 
 case class Event(
     id: Option[Long],
@@ -24,13 +22,14 @@ case class Event(
     state: String,
     country: String) {
 
-  def ticketBlocksWithAvailability(implicit timeout: Timeout): Future[Seq[TicketBlock]] = {
+  def ticketBlocksWithAvailability(ticketBlocks: TicketBlocks,
+                                   issuer: ActorRef)
+                                  (implicit timeout: Timeout, ec: TicketLordsExecutionContext): Future[Seq[TicketBlock]] = {
     this.id.fold {
       Future.successful(Nil: Seq[TicketBlock])
     } { eid =>
 
-      val basicBlocks = TicketBlock.listForEvent(eid)
-      val issuer = TicketIssuer.getSelection
+      val basicBlocks = ticketBlocks.listForEvent(eid)
       val blocksWithAvailability: Future[Seq[TicketBlock]] =
         basicBlocks.flatMap { blocks =>
           val updatedBlocks: Seq[Future[TicketBlock]] = for {
@@ -57,9 +56,10 @@ case class Event(
 
 object Event {
   implicit val format: Format[Event] = Json.format[Event]
+}
 
-  protected val dbConfig = DatabaseConfigProvider.get[JdbcProfile](current)
-  import dbConfig._
+class Events @Inject()(val dbConfigProvider: DatabaseConfigProvider)
+                      (implicit ec: TicketLordsExecutionContext) extends SlickMapping {
   import dbConfig.driver.api._
 
   class EventsTable(tag: Tag) extends Table[Event](tag, "EVENTS") {

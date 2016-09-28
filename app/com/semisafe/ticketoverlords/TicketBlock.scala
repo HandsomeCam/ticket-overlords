@@ -1,19 +1,14 @@
 package com.semisafe.ticketoverlords
 
-import org.joda.time.DateTime
-import play.api.libs.json.{ Json, Format }
+import javax.inject.{Inject, Named}
 
+import akka.actor.ActorRef
+import org.joda.time.DateTime
+import play.api.libs.json.{Format, Json}
 import play.api.db.slick.DatabaseConfigProvider
 import slick.driver.JdbcProfile
-import play.api.Play.current
-import play.api.db.DBApi
-import SlickMapping.jodaDateTimeMapping
-import scala.concurrent.Future
-import play.api.libs.concurrent.Execution.Implicits._
-import play.api.Logger
 
-import akka.actor.ActorSelection
-import play.libs.Akka
+import scala.concurrent.Future
 
 case class TicketBlock(
   id: Option[Long],
@@ -28,9 +23,13 @@ case class TicketBlock(
 
 object TicketBlock {
   implicit val format: Format[TicketBlock] = Json.format[TicketBlock]
+}
 
-  protected val dbConfig = DatabaseConfigProvider.get[JdbcProfile](current)
-  import dbConfig._
+
+class TicketBlocks @Inject()(events: Events,
+                             @Named("ticketIssuer") issuer: ActorRef,
+                             val dbConfigProvider: DatabaseConfigProvider)
+                            (implicit ec: TicketLordsExecutionContext) extends SlickMapping {
   import dbConfig.driver.api._
 
   class TicketBlocksTable(tag: Tag)
@@ -45,7 +44,7 @@ object TicketBlock {
     def saleStart = column[DateTime]("SALE_START")
     def saleEnd = column[DateTime]("SALE_END")
 
-    def event = foreignKey("TB_EVENT", eventID, Event.table)(_.id)
+    private def event = foreignKey("TB_EVENT", eventID, events.table)(_.id)
 
     def * = (id.?, eventID, name, productCode, price, initialSize,
       saleStart, saleEnd) <>
@@ -85,7 +84,6 @@ object TicketBlock {
     db.run(insertion).map { resultID =>
       val createdBlock = newTicketBlock.copy(id = Option(resultID))
 
-      val issuer = TicketIssuer.getSelection
       issuer ! TicketBlockCreated(createdBlock)
 
       createdBlock

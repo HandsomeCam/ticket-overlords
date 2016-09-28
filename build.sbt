@@ -4,7 +4,7 @@ version := "1.0-SNAPSHOT"
 
 lazy val root = (project in file(".")).enablePlugins(PlayScala)
 
-scalaVersion := "2.11.1"
+scalaVersion := "2.11.8"
 
 libraryDependencies ++= Seq(
   specs2 % Test,
@@ -12,11 +12,10 @@ libraryDependencies ++= Seq(
   ws,
   filters,
   "org.webjars" % "jquery" % "2.1.4",
-  "com.typesafe.play" %% "play-slick-evolutions" % "1.0.0",
-  "com.h2database" % "h2" % "1.4.187",
-  "com.typesafe.play" %% "play-slick" % "1.0.0",
-  "org.webjars" % "requirejs" % "2.1.18",
+  "com.typesafe.play" %% "play-slick-evolutions" % "2.0.2",
+  "com.h2database" % "h2" % "1.4.192",
+  "com.typesafe.play" %% "play-slick" % "2.0.2",
+  "org.webjars" % "requirejs" % "2.1.22",
   "org.webjars" % "react" % "0.13.3"
 )
 
-resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"

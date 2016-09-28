@@ -2,14 +2,15 @@ package com.semisafe.ticketoverlords
 
 import akka.actor.Actor
 import akka.actor.Status.{ Failure => ActorFailure }
-import play.api.libs.concurrent.Execution.Implicits._
 
 class OrderRoutingException(message: String) extends Exception(message)
 
-class TicketIssuerWorker(ticketBlockID: Long) extends Actor {
+class TicketIssuerWorker(orders: Orders, ticketBlocks: TicketBlocks, ticketBlockID: Long) extends Actor {
+
+  implicit val ec = context.dispatcher
 
   override def preStart = {
-    val availabilityFuture = TicketBlock.availability(ticketBlockID)
+    val availabilityFuture = ticketBlocks.availability(ticketBlockID)
 
     availabilityFuture.onSuccess {
       case result => self ! AddTickets(result)
@@ -83,7 +84,7 @@ class TicketIssuerWorker(ticketBlockID: Long) extends Actor {
         val newAvailability = availability - order.ticketQuantity
         context.become(normalOperation(newAvailability))
 
-        val createdOrder = Order.create(order)
+        val createdOrder = orders.create(order)
 
         createdOrder.map(origin ! _)
       } else {

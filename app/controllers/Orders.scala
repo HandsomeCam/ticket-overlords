@@ -1,39 +1,37 @@
 package controllers
 
+import javax.inject.{Inject, Named}
+
+import akka.actor.ActorRef
 import play.api.mvc._
 import play.api.libs.json.Json
-import scala.concurrent.Future
-import play.api.libs.concurrent.Execution.Implicits._
 
-import com.semisafe.ticketoverlords.{ Order, TicketBlock }
+import scala.concurrent.{ExecutionContext, Future}
+import com.semisafe.ticketoverlords._
 import controllers.responses._
-
-import play.api.libs.concurrent.Akka
-import play.api.Play.current
-import com.semisafe.ticketoverlords.TicketIssuer
-import akka.actor.Props
-
 import akka.pattern.ask
 import akka.util.Timeout
+
 import scala.concurrent.duration._
-
-import com.semisafe.ticketoverlords.InsufficientTicketsAvailable
-import com.semisafe.ticketoverlords.TicketBlockUnavailable
-import play.api.Logger
-
+import play.api.{Configuration, Logger}
 import play.filters.csrf._
 
-object Orders extends Controller {
+class Orders @Inject()(config: Configuration,
+                       @Named("ticketIssuer") issuer: ActorRef,
+                       orders: com.semisafe.ticketoverlords.Orders,
+                       CSRFCheck: CSRFCheck,
+                       action: BaseAction)
+                       (implicit ec: ExecutionContext) extends Controller {
 
-  def list = Action.async { request =>
-    val orders = Order.list
-    orders.map { o =>
+  def list = action.async { request =>
+    val list = orders.list
+    list.map { o =>
       Ok(Json.toJson(SuccessResponse(o)))
     }
   }
 
-  def getByID(orderID: Long) = Action.async { request =>
-    val orderFuture = Order.getByID(orderID)
+  def getByID(orderID: Long) = action.async { request =>
+    val orderFuture = orders.getByID(orderID)
 
     orderFuture.map { order =>
       order.fold {
@@ -45,7 +43,7 @@ object Orders extends Controller {
   }
 
   def create = CSRFCheck {
-    Action.async(parse.json) { request =>
+    action.async(parse.json) { request =>
       val incomingBody = request.body.validate[Order]
 
       incomingBody.fold(error => {
@@ -54,11 +52,10 @@ object Orders extends Controller {
         Future.successful(BadRequest(Json.toJson(response)))
       }, { order =>
         val timeoutKey = "ticketoverlords.timeouts.issuer"
-        val configuredTimeout = current.configuration.getInt(timeoutKey)
+        val configuredTimeout = config.getInt(timeoutKey)
         val resolvedTimeout = configuredTimeout.getOrElse(5)
         implicit val timeout = Timeout(resolvedTimeout.seconds)
 
-        val issuer = TicketIssuer.getSelection
         val orderFuture = (issuer ? order).mapTo[Order]
 
         // Convert successful future to Json
